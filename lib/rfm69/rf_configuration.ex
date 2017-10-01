@@ -55,7 +55,7 @@ defmodule RFM69.RFConfiguration do
              packet_config2: 0x02,               # Packet mode settings
              aes_key:        0x00,               # 16 bytes of the cypher key
              temp1:          0x01,               # Temperature Sensor control
-	           temp2:          0x00,               # Temperature readout Omit test
+             temp2:          0x00,               # Temperature readout Omit test
              test_lna:       0x1B,               # Sensitivity boost
              test_pa1:       0x55,               # High Power PA settings
              test_pa2:       0x70,               # High Power PA settings
