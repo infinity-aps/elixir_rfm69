@@ -1,4 +1,7 @@
 defmodule RFM69.RFConfiguration do
+  @moduledoc """
+  RFConfiguration is a module and associated struct to model the registers in an RFM69 chip
+  """
 
   alias RFM69.RFConfiguration
 
