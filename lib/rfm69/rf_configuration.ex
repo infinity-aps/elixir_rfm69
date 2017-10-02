@@ -3,6 +3,8 @@ defmodule RFM69.RFConfiguration do
   RFConfiguration is a module and associated struct to model the registers in an RFM69 chip
   """
 
+  use Bitwise
+
   alias RFM69.RFConfiguration
 
   # default settings from
@@ -13,7 +15,7 @@ defmodule RFM69.RFConfiguration do
              data_modul:     0x00,               # Data operation mode and Modulation settings
              bitrate:        0x1A0B,             # Bit Rate setting
              fdev:           0x0052,             # Frequency Deviation setting
-             frf_msb:        0xE4C000,           # RF Carrier Frequency
+             frf:            0xE4C000,           # RF Carrier Frequency
              osc1:           0x41,               # RF Oscillators Settings
              afc_ctrl:       0x00,               # AFC control in low modulation index situations
              reserved0_c:    0x02,
@@ -71,7 +73,7 @@ defmodule RFM69.RFConfiguration do
       rf_config.data_modul::8,
       rf_config.bitrate::16,
       rf_config.fdev::16,
-      rf_config.frf_msb::24,
+      rf_config.frf::24,
       rf_config.osc1::8,
       rf_config.afc_ctrl::8,
       rf_config.reserved0_c::8,
@@ -117,5 +119,14 @@ defmodule RFM69.RFConfiguration do
       rf_config.aes_key::128,
       rf_config.temp1::8,
       rf_config.temp2::8>>
+  end
+
+  @oscillator_frequency 32_000_000
+  def frequency_to_registers(frequency_in_hz) do
+    trunc(((frequency_in_hz <<< 19) + (@oscillator_frequency / 2)) / @oscillator_frequency)
+  end
+
+  def bitrate_to_registers(bitrate) do
+    trunc((@oscillator_frequency + bitrate / 2) / bitrate)
   end
 end
