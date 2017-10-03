@@ -21,6 +21,7 @@ defmodule Rfm69.Mixfile do
 
   defp deps do
     [
+      {:elixir_ale, "~> 1.0"},
       {:credo, "~> 0.8", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev}
     ]

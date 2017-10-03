@@ -10,8 +10,7 @@ defmodule RFM69.RFConfiguration do
   # default settings from
   # http://www.hoperf.com/upload/rf/RFM69HW-V1.3.pdf
 
-  defstruct [fifo:           0x00,               # FIFO read/write access
-             op_mode:        0x04,               # Operating modes of the transceiver
+  defstruct [op_mode:        0x04,               # Operating modes of the transceiver
              data_modul:     0x00,               # Data operation mode and Modulation settings
              bitrate:        0x1A0B,             # Bit Rate setting
              fdev:           0x0052,             # Frequency Deviation setting
@@ -68,8 +67,7 @@ defmodule RFM69.RFConfiguration do
              test_afc:       0x00]               # AFC offset for low modulation index AFC
 
   def to_binary(rf_config = %RFConfiguration{}) do
-    <<rf_config.fifo::8,
-      rf_config.op_mode::8,
+    <<rf_config.op_mode::8,
       rf_config.data_modul::8,
       rf_config.bitrate::16,
       rf_config.fdev::16,
