@@ -9,6 +9,11 @@ defmodule RFM69 do
   # @fifo_threshold 20
   @transfer_sleep trunc(@fifo_size / 4) # time to wait for fifo to be processed during transfer
 
+  def write_and_read(packet_bytes, timeout_ms) do
+    write(packet_bytes)
+    read(timeout_ms)
+  end
+
   def write(packet_bytes) do
     clear_fifo()
     set_mode(:standby)
@@ -17,10 +22,28 @@ defmodule RFM69 do
     set_mode(:sleep)
   end
 
-  # def read() do
-  #   set_auto_modes(0)
-  #   set_mode(:receiver)
-  # end
+  def read(timeout_ms) do
+    set_auto_modes([])
+    set_mode(:receiver)
+    @device.await_interrupt()
+    receive do
+      {:ok, :interrupt_received} ->
+        Logger.info "I can't believe this worked"
+        # read rssi
+        bytes = read_until_null(<<>>)     
+        Logger.debug fn() -> "response: #{Base.encode16(bytes)}" end
+    after
+        timeout_ms -> Logger.info "I got nothin'"
+    end
+    set_mode(:sleep)
+  end
+
+  defp read_until_null(data) do
+    case @device.read_single(0x00) do
+      0x00 -> data
+      byte -> read_until_null(data <> <<byte::8>>)
+    end
+  end
 
   defp transmit(bytes, available_buffer_bytes) when byte_size(bytes) <= available_buffer_bytes do
     Logger.debug fn() -> "Transmitting remaining: #{Base.encode16(bytes)}, available_buffer_bytes: #{available_buffer_bytes}" end
