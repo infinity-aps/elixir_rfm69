@@ -38,11 +38,11 @@ defmodule RFM69.Device do
   def write_single(location, data), do: write_burst(location, <<data::8>>)
   def reset, do: GenServer.call(__MODULE__, {:reset})
   def await_interrupt, do: GenServer.call(__MODULE__, {:await_interrupt})
+  def cancel_interrupt, do: GenServer.call(__MODULE__, {:cancel_interrupt})
 
   @configuration_start 0x01
   def write_configuration(rf_config = %Configuration{}) do
     configuration_bytes = Configuration.to_binary(rf_config)
-    Logger.debug "Writing full configuration"
     :ok = write_burst(@configuration_start, configuration_bytes)
   end
 
@@ -50,12 +50,18 @@ defmodule RFM69.Device do
     byte_count = byte_size(Configuration.to_binary(%Configuration{}))
     {:ok, response_bytes} = read_burst(@configuration_start, byte_count)
     rf_config = Configuration.from_binary(response_bytes)
-    Logger.debug fn() -> "Configuration: #{inspect(rf_config, limit: -1)}" end
     rf_config
   end
 
+  @frf_location 0x07
+  def write_frequency(frequency_in_hz) do
+    register_values = Configuration.frequency_to_registers(frequency_in_hz)
+    register_bytes = <<register_values::24>>
+    :ok = write_burst(@frf_location, register_bytes)
+    {:ok}
+  end
+
   def handle_call({:reset}, _from, state = %{reset_pid: reset_pid}) do
-    Logger.debug "Resetting device"
     GPIO.write(reset_pid, 1)
     :timer.sleep(1)
     GPIO.write(reset_pid, 0)
@@ -66,7 +72,6 @@ defmodule RFM69.Device do
   @write_mode 0x80
   def handle_call({:write_burst, location, data}, _from, state = %{spi_pid: spi_pid}) do
     tx_bytes = <<(@write_mode ||| location)::8>> <> data
-    # Logger.debug fn() -> "Writing #{Base.encode16(tx_bytes)}" end
     SPI.transfer(spi_pid, tx_bytes)
     {:reply, :ok, state}
   end
@@ -75,20 +80,20 @@ defmodule RFM69.Device do
     size_bits = byte_count * 8
     tx_bytes = <<location::8, 0x00::size(size_bits)>>
     <<_::8, rx_bytes::binary>> = SPI.transfer(spi_pid, tx_bytes)
-    # Logger.debug fn() -> "Received #{Base.encode16(rx_bytes)}" end
     {:reply, {:ok, rx_bytes}, state}
   end
 
   def handle_call({:await_interrupt}, {sender, _}, state = %{interrupt_pid: interrupt_pid}) do
-    Logger.debug "Setting interrupt on pin"
     GPIO.set_int(interrupt_pid, :rising)
-    new_state = Map.put(state, :awaiting_interrupt, sender)
-    {:reply, :ok, new_state}
+    {:reply, :ok, Map.put(state, :awaiting_interrupt, sender)}
   end
 
-  def handle_info({:gpio_interrupt, _, :rising}, state) do
-    %{awaiting_interrupt: awaiting_interrupt, interrupt_pid: interrupt_pid} = state
-    Logger.debug "Received interrupt on pin"
+  def handle_call({:cancel_interrupt}, {_, _}, state = %{interrupt_pid: interrupt_pid}) do
+    GPIO.set_int(interrupt_pid, :none)
+    {:reply, :ok, Map.delete(state, :awaiting_interrupt)}
+  end
+
+  def handle_info({:gpio_interrupt, _, :rising}, state = %{awaiting_interrupt: awaiting_interrupt, interrupt_pid: interrupt_pid}) do
     GPIO.set_int(interrupt_pid, :none)
     send(awaiting_interrupt, {:ok, :interrupt_received})
     {:noreply, Map.delete(state, :awaiting_interrupt)}

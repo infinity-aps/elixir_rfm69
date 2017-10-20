@@ -9,33 +9,61 @@ defmodule RFM69 do
   # @fifo_threshold 20
   @transfer_sleep trunc(@fifo_size / 4) # time to wait for fifo to be processed during transfer
 
-  def write_and_read(packet_bytes, timeout_ms) do
-    write(packet_bytes)
-    read(timeout_ms)
-  end
-
-  def write(packet_bytes) do
-    clear_fifo()
-    set_mode(:standby)
-    set_auto_modes([:enter_condition_fifo_not_empty, :exit_condition_fifo_empty, :intermediate_mode_tx])
-    transmit(packet_bytes <> <<0x00::8>>, @fifo_size)
-    set_mode(:sleep)
+  def set_base_frequency(mhz) do
+    @device.write_frequency(trunc(mhz * 1_000_000))
   end
 
   def read(timeout_ms) do
     set_auto_modes([])
     set_mode(:receiver)
     @device.await_interrupt()
-    receive do
+    result = receive do
       {:ok, :interrupt_received} ->
-        Logger.info "I can't believe this worked"
-        # read rssi
-        bytes = read_until_null(<<>>)     
+        Logger.info "Received response"
+        rssi = read_rssi()
+        bytes = read_until_null(<<>>)
         Logger.debug fn() -> "response: #{Base.encode16(bytes)}" end
+        {:ok, %{data: bytes, rssi: rssi}}
     after
-        timeout_ms -> Logger.info "I got nothin'"
+      timeout_ms ->
+        Logger.info "Timeout reached"
+        @device.cancel_interrupt()
+        {:error, :timeout}
     end
     set_mode(:sleep)
+    result
+  end
+
+  def write(packet_bytes, repetitions, repetition_delay, timeout_ms, initial \\ true) do
+    if initial == true do
+      clear_fifo()
+      set_mode(:standby)
+    end
+
+    case repetitions do
+      r when r >= 1 ->
+        _write(packet_bytes, timeout_ms)
+        :timer.sleep(repetition_delay)
+        write(packet_bytes, repetitions - 1, repetition_delay, timeout_ms, false)
+      true ->
+        set_mode(:sleep)
+        {:ok, ""}
+    end
+  end
+
+  def _write(packet_bytes, _timeout_ms) do
+    modes = [:enter_condition_fifo_not_empty, :exit_condition_fifo_empty, :intermediate_mode_tx]
+    set_auto_modes(modes)
+    transmit(packet_bytes <> <<0x00::8>>, @fifo_size)
+  end
+
+  def write_and_read(packet_bytes, timeout_ms) do
+    write(packet_bytes, timeout_ms, 1, 0)
+    read(timeout_ms)
+  end
+
+  def clear_buffers do
+    clear_fifo()
   end
 
   defp read_until_null(data) do
@@ -46,7 +74,7 @@ defmodule RFM69 do
   end
 
   defp transmit(bytes, available_buffer_bytes) when byte_size(bytes) <= available_buffer_bytes do
-    Logger.debug fn() -> "Transmitting remaining: #{Base.encode16(bytes)}, available_buffer_bytes: #{available_buffer_bytes}" end
+    # Logger.debug fn() -> "Transmitting remaining: #{Base.encode16(bytes)}, available_buffer_bytes: #{available_buffer_bytes}" end
     _transmit(bytes)
     wait_for_mode(:standby)
   end
@@ -68,7 +96,7 @@ defmodule RFM69 do
   @reg_irq_flags2 0x28
   @fifo_overrun 0x10
   defp clear_fifo() do
-    Logger.debug "Clearing FIFO"
+    # Logger.debug "Clearing FIFO"
     @device.write_single(@reg_irq_flags2, @fifo_overrun)
   end
 
@@ -78,10 +106,10 @@ defmodule RFM69 do
   end
 
   defp wait_for_buffer_to_become_available() do
-    Logger.debug "Waiting for buffer to become available"
+    # Logger.debug "Waiting for buffer to become available"
     case fifo_threshold_exceeded?() do
       true -> wait_for_buffer_to_become_available()
-      false -> Logger.debug "Buffer available"
+      false -> nil # Logger.debug "Buffer available"
     end
   end
 
@@ -104,7 +132,7 @@ defmodule RFM69 do
     case mode do
       ^current_mode -> true
       _ ->
-        Logger.debug fn() -> "Setting mode to #{inspect(mode)}" end
+        # Logger.debug fn() -> "Setting mode to #{inspect(mode)}" end
         @device.write_single(@reg_op_mode, mode)
         wait_for_mode_ready(mode)
     end
@@ -150,6 +178,12 @@ defmodule RFM69 do
       true -> true
       false -> wait_for_mode_ready(mode)
     end
+  end
+
+  @reg_rssi_val 0x24
+  defp read_rssi do
+    {:ok, <<raw_rssi::8>>} = @device.read_burst(@reg_rssi_val, 1)
+    -1 * trunc(raw_rssi) / 2
   end
 
   # def read_hardware_version() do
