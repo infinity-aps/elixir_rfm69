@@ -45,7 +45,7 @@ defmodule RFM69 do
         _write(packet_bytes, timeout_ms)
         :timer.sleep(repetition_delay)
         write(packet_bytes, repetitions - 1, repetition_delay, timeout_ms, false)
-      true ->
+      0 ->
         set_mode(:sleep)
         {:ok, ""}
     end
@@ -54,11 +54,11 @@ defmodule RFM69 do
   def _write(packet_bytes, _timeout_ms) do
     modes = [:enter_condition_fifo_not_empty, :exit_condition_fifo_empty, :intermediate_mode_tx]
     set_auto_modes(modes)
-    transmit(packet_bytes <> <<0x00::8>>, @fifo_size)
+    transmit(packet_bytes, @fifo_size)
   end
 
   def write_and_read(packet_bytes, timeout_ms) do
-    write(packet_bytes, timeout_ms, 1, 0)
+    write(packet_bytes, 1, 0, timeout_ms)
     read(timeout_ms)
   end
 
@@ -74,18 +74,18 @@ defmodule RFM69 do
   end
 
   defp transmit(bytes, available_buffer_bytes) when byte_size(bytes) <= available_buffer_bytes do
-    # Logger.debug fn() -> "Transmitting remaining: #{Base.encode16(bytes)}, available_buffer_bytes: #{available_buffer_bytes}" end
+    Logger.debug fn() -> "Transmitting remaining: #{Base.encode16(bytes)}, available_buffer_bytes: #{available_buffer_bytes}" end
     _transmit(bytes)
     wait_for_mode(:standby)
   end
 
-  # defp transmit(bytes, available_buffer_bytes) do
-  #   <<transmit_now::binary-size(available_buffer_bytes), transmit_later::binary>> = bytes
-  #   Logger.debug fn() -> "Transmitting initial: #{Base.encode16(transmit_now)}, available_buffer_bytes: #{available_buffer_bytes}" end
-  #   available_buffer_bytes = _transmit(transmit_now)
-  #   Logger.debug fn() -> "Queueing rest: #{Base.encode16(transmit_later)}, new available_buffer_bytes: #{available_buffer_bytes}" end
-  #   transmit(transmit_later, available_buffer_bytes)
-  # end
+  defp transmit(bytes, available_buffer_bytes) do
+    <<transmit_now::binary-size(available_buffer_bytes), transmit_later::binary>> = bytes
+    Logger.debug fn() -> "Transmitting initial: #{Base.encode16(transmit_now)}, available_buffer_bytes: #{available_buffer_bytes}" end
+    available_buffer_bytes = _transmit(transmit_now)
+    Logger.debug fn() -> "Queueing rest: #{Base.encode16(transmit_later)}, new available_buffer_bytes: #{available_buffer_bytes}" end
+    transmit(transmit_later, available_buffer_bytes)
+  end
 
   defp _transmit(bytes) do
     @device.write_burst(0x00, bytes)
