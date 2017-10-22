@@ -1,17 +1,15 @@
-defmodule RFM69.RFConfiguration do
+defmodule RFM69.Configuration do
   @moduledoc """
-  RFConfiguration is a module and associated struct to model the registers in an RFM69 chip
+  RFM69.Configuration is a module and associated struct to model register configuration in an RFM69 chip
   """
 
   use Bitwise
 
-  alias RFM69.RFConfiguration
+  alias RFM69.Configuration
 
   # default settings from
   # http://www.hoperf.com/upload/rf/RFM69HW-V1.3.pdf
-
-  defstruct [fifo:           0x00,               # FIFO read/write access
-             op_mode:        0x04,               # Operating modes of the transceiver
+  defstruct [op_mode:        0x04,               # Operating modes of the transceiver
              data_modul:     0x00,               # Data operation mode and Modulation settings
              bitrate:        0x1A0B,             # Bit Rate setting
              fdev:           0x0052,             # Frequency Deviation setting
@@ -67,63 +65,62 @@ defmodule RFM69.RFConfiguration do
              test_dagc:      0x30,               # Fading Margin Improvement
              test_afc:       0x00]               # AFC offset for low modulation index AFC
 
-  def to_binary(rf_config = %RFConfiguration{}) do
-    <<rf_config.fifo::8,
-      rf_config.op_mode::8,
-      rf_config.data_modul::8,
-      rf_config.bitrate::16,
-      rf_config.fdev::16,
-      rf_config.frf::24,
-      rf_config.osc1::8,
-      rf_config.afc_ctrl::8,
-      rf_config.reserved0_c::8,
-      rf_config.listen1::8,
-      rf_config.listen2::8,
-      rf_config.listen3::8,
-      rf_config.version::8,
-      rf_config.pa_level::8,
-      rf_config.pa_ramp::8,
-      rf_config.ocp::8,
-      rf_config.reserved14::8,
-      rf_config.reserved15::8,
-      rf_config.reserved16::8,
-      rf_config.reserved17::8,
-      rf_config.lna::8,
-      rf_config.rx_bw::8,
-      rf_config.afc_bw::8,
-      rf_config.ook_peak::8,
-      rf_config.ook_avg::8,
-      rf_config.ook_fix::8,
-      rf_config.afc_fei::8,
-      rf_config.afc::16,
-      rf_config.fei::16,
-      rf_config.rssi_config::8,
-      rf_config.rssi_value::8,
-      rf_config.dio_mapping1::8,
-      rf_config.dio_mapping2::8,
-      rf_config.irq_flags1::8,
-      rf_config.irq_flags2::8,
-      rf_config.rssi_thresh::8,
-      rf_config.rx_timeout1::8,
-      rf_config.rx_timeout2::8,
-      rf_config.preamble::16,
-      rf_config.sync_config::8,
-      rf_config.sync_value::64,
-      rf_config.packet_config1::8,
-      rf_config.payload_length::8,
-      rf_config.node_adrs::8,
-      rf_config.broadcast_adrs::8,
-      rf_config.auto_modes::8,
-      rf_config.fifo_thresh::8,
-      rf_config.packet_config2::8,
-      rf_config.aes_key::128,
-      rf_config.temp1::8,
-      rf_config.temp2::8>>
+  def to_binary(c = %Configuration{}) do
+    <<c.op_mode::8,
+      c.data_modul::8,
+      c.bitrate::16,
+      c.fdev::16,
+      c.frf::24,
+      c.osc1::8,
+      c.afc_ctrl::8,
+      c.reserved0_c::8,
+      c.listen1::8,
+      c.listen2::8,
+      c.listen3::8,
+      c.version::8,
+      c.pa_level::8,
+      c.pa_ramp::8,
+      c.ocp::8,
+      c.reserved14::8,
+      c.reserved15::8,
+      c.reserved16::8,
+      c.reserved17::8,
+      c.lna::8,
+      c.rx_bw::8,
+      c.afc_bw::8,
+      c.ook_peak::8,
+      c.ook_avg::8,
+      c.ook_fix::8,
+      c.afc_fei::8,
+      c.afc::16,
+      c.fei::16,
+      c.rssi_config::8,
+      c.rssi_value::8,
+      c.dio_mapping1::8,
+      c.dio_mapping2::8,
+      c.irq_flags1::8,
+      c.irq_flags2::8,
+      c.rssi_thresh::8,
+      c.rx_timeout1::8,
+      c.rx_timeout2::8,
+      c.preamble::16,
+      c.sync_config::8,
+      c.sync_value::64,
+      c.packet_config1::8,
+      c.payload_length::8,
+      c.node_adrs::8,
+      c.broadcast_adrs::8,
+      c.auto_modes::8,
+      c.fifo_thresh::8,
+      c.packet_config2::8,
+      c.aes_key::128,
+      c.temp1::8,
+      c.temp2::8 >>
   end
 
   @oscillator_frequency 32_000_000
   def frequency_to_registers(frequency_in_hz) do
-    trunc(((frequency_in_hz <<< 19) + (@oscillator_frequency / 2)) / @oscillator_frequency)
+    trunc(((frequency_in_hz <<< 19) + @oscillator_frequency / 2) / @oscillator_frequency)
   end
 
   def bitrate_to_registers(bitrate) do
