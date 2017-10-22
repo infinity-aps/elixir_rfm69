@@ -14,8 +14,10 @@ defmodule RFM69.RFConfigurationTest do
       data_modul: 0x08,
       pa_level: 0x5F,
       lna: 0x88,
-      rx_bw: 0x40, # 250kHz with dcc freq shift 2, RxBwMant of 16 and RxBwExp of 0
-      afc_bw: 0x80, # dcc freq shift of 4
+      # 250kHz with dcc freq shift 2, RxBwMant of 16 and RxBwExp of 0
+      rx_bw: 0x40,
+      # dcc freq shift of 4
+      afc_bw: 0x80,
       dio_mapping1: 0x80,
       dio_mapping2: 0x07,
       rssi_thresh: 0xE4,
@@ -28,7 +30,11 @@ defmodule RFM69.RFConfigurationTest do
       packet_config2: 0x00
     }
 
-    {:ok, expected_bytes} = Base.decode16("00040807A10052E5266641000292F520245F091A40B07B9B884080408006100000000002FF80078000E40000001898FF00FF000101010100000000009400000000000000000000000000000000000100")
+    {:ok, expected_bytes} =
+      Base.decode16(
+        "00040807A10052E5266641000292F520245F091A40B07B9B884080408006100000000002FF80078000E40000001898FF00FF000101010100000000009400000000000000000000000000000000000100"
+      )
+
     assert expected_bytes == RFConfiguration.to_binary(test_configuration)
   end
 end

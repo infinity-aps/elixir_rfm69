@@ -18,12 +18,11 @@ defmodule RFM69.Device do
          {:ok, reset_pid} <- GPIO.start_link(reset_pin, :output),
          {:ok, interrupt_pid} <- GPIO.start_link(interrupt_pin, :input),
          :ok <- GPIO.write(reset_pid, 0) do
-
       {:ok, %{spi_pid: spi_pid, reset_pid: reset_pid, interrupt_pid: interrupt_pid}}
     else
       error ->
         message = "The SPI RFM69 chip interface failed to start"
-        Logger.error fn() -> "#{message}: #{inspect(error)}" end
+        Logger.error(fn -> "#{message}: #{inspect(error)}" end)
         {:error, message}
     end
   end
@@ -33,7 +32,9 @@ defmodule RFM69.Device do
     value
   end
 
-  def read_burst(location, byte_count), do: GenServer.call(__MODULE__, {:read_burst, location, byte_count})
+  def read_burst(location, byte_count),
+    do: GenServer.call(__MODULE__, {:read_burst, location, byte_count})
+
   def write_burst(location, data), do: GenServer.call(__MODULE__, {:write_burst, location, data})
   def write_single(location, data), do: write_burst(location, <<data::8>>)
   def reset, do: GenServer.call(__MODULE__, {:reset})
@@ -71,7 +72,7 @@ defmodule RFM69.Device do
 
   @write_mode 0x80
   def handle_call({:write_burst, location, data}, _from, state = %{spi_pid: spi_pid}) do
-    tx_bytes = <<(@write_mode ||| location)::8>> <> data
+    tx_bytes = <<@write_mode ||| location::8>> <> data
     SPI.transfer(spi_pid, tx_bytes)
     {:reply, :ok, state}
   end
@@ -93,7 +94,10 @@ defmodule RFM69.Device do
     {:reply, :ok, Map.delete(state, :awaiting_interrupt)}
   end
 
-  def handle_info({:gpio_interrupt, _, :rising}, state = %{awaiting_interrupt: awaiting_interrupt, interrupt_pid: interrupt_pid}) do
+  def handle_info(
+        {:gpio_interrupt, _, :rising},
+        state = %{awaiting_interrupt: awaiting_interrupt, interrupt_pid: interrupt_pid}
+      ) do
     GPIO.set_int(interrupt_pid, :none)
     send(awaiting_interrupt, {:ok, :interrupt_received})
     {:noreply, Map.delete(state, :awaiting_interrupt)}
@@ -102,8 +106,4 @@ defmodule RFM69.Device do
   def handle_info({:gpio_interrupt, _, _}, state) do
     {:noreply, state}
   end
-
-  # defp genserver_timeout(timeout_ms) do
-  #   timeout_ms + 2_000
-  # end
 end

@@ -277,7 +277,7 @@ defmodule RFM69.Configuration do
 
   @oscillator_frequency 32_000_000
   def frequency_to_registers(frequency_in_hz) do
-    trunc(((frequency_in_hz <<< 19) + (@oscillator_frequency / 2)) / @oscillator_frequency)
+    trunc(((frequency_in_hz <<< 19) + @oscillator_frequency / 2) / @oscillator_frequency)
   end
 
   def bitrate_to_registers(bitrate) do
