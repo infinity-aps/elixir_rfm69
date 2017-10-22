@@ -47,13 +47,6 @@ defmodule RFM69.Device do
     :ok = write_burst(@configuration_start, configuration_bytes)
   end
 
-  def read_configuration do
-    byte_count = byte_size(Configuration.to_binary(%Configuration{}))
-    {:ok, response_bytes} = read_burst(@configuration_start, byte_count)
-    rf_config = Configuration.from_binary(response_bytes)
-    rf_config
-  end
-
   @frf_location 0x07
   def write_frequency(frequency_in_hz) do
     register_values = Configuration.frequency_to_registers(frequency_in_hz)
