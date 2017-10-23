@@ -11,7 +11,10 @@ defmodule Rfm69.Mixfile do
       name: "RFM69",
       source_url: "https://github.com/infinity-aps/elixir_rfm69",
       description: description(),
-      package: package()
+      package: package(),
+      preferred_cli_env: [
+        "dialyzer": :test
+      ]
     ]
   end
 
@@ -21,8 +24,9 @@ defmodule Rfm69.Mixfile do
 
   defp deps do
     [
-      {:elixir_ale, "~> 1.0"},
+      {:elixir_ale, github: "tmecklem/elixir_ale", branch: "master"},
       {:credo, "~> 0.8", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 0.5.1", only: :test, runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev}
     ]
   end
