@@ -16,4 +16,3 @@ matrix:
 script:
   - mix credo --strict
   - mix test
-  - mix dialyzer
