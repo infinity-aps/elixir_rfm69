@@ -6,10 +6,18 @@ defmodule RFM69 do
   @fifo_size 66
   @transfer_sleep trunc(@fifo_size / 4)
 
+  @doc """
+  Sets the base frequency of the RFM69 chip in MHz
+  """
+  @spec set_base_frequency(pos_integer) :: {:ok}
   def set_base_frequency(mhz) do
     @device.write_frequency(trunc(mhz * 1_000_000))
   end
 
+  @doc """
+  reads a frame of binary data from the chip's FIFO queue
+  """
+  @spec read(non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
   def read(timeout_ms) do
     set_auto_modes([])
     set_mode(:receiver)
@@ -31,6 +39,10 @@ defmodule RFM69 do
     result
   end
 
+  @doc """
+  Writes a frame of binary data to the FIFO queue
+  """
+  @spec write(binary, pos_integer, non_neg_integer, non_neg_integer, boolean) :: {:ok, <<>>}
   def write(packet_bytes, repetitions, repetition_delay, timeout_ms, initial \\ true) do
     if initial == true do
       clear_fifo()
@@ -49,25 +61,30 @@ defmodule RFM69 do
     end
   end
 
-  def _write(packet_bytes, _timeout_ms) do
-    modes = [:enter_condition_fifo_not_empty, :exit_condition_fifo_empty, :intermediate_mode_tx]
-    set_auto_modes(modes)
-    transmit(packet_bytes, @fifo_size)
-  end
-
+  @doc """
+  Writes the given binary data to the FIFO queue and waits for the response.
+  """
+  @spec write_and_read(binary, non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
   def write_and_read(packet_bytes, timeout_ms) do
     write(packet_bytes, 1, 0, timeout_ms)
     read(timeout_ms)
   end
 
+  @spec clear_buffers() :: :ok
   def clear_buffers do
     clear_fifo()
   end
 
+  defp _write(packet_bytes, _timeout_ms) do
+    modes = [:enter_condition_fifo_not_empty, :exit_condition_fifo_empty, :intermediate_mode_tx]
+    set_auto_modes(modes)
+    transmit(packet_bytes, @fifo_size)
+  end
+
   defp read_until_null(data) do
     case @device.read_single(0x00) do
-      0x00 -> data
-      byte -> read_until_null(data <> <<byte::8>>)
+      {:ok, 0x00} -> data
+      {:ok, byte} -> read_until_null(data <> <<byte::8>>)
     end
   end
 
@@ -96,7 +113,8 @@ defmodule RFM69 do
 
   @fifo_level 0x20
   defp fifo_threshold_exceeded?() do
-    (@device.read_single(@reg_irq_flags2) &&& @fifo_level) != 0x00
+    {:ok, byte} = @device.read_single(@reg_irq_flags2)
+    (byte &&& @fifo_level) != 0x00
   end
 
   defp wait_for_buffer_to_become_available do
@@ -119,7 +137,7 @@ defmodule RFM69 do
     transmitter:   0x0C,
     receiver:      0x10
   }
-  def set_mode(mode) do
+  defp set_mode(mode) do
     mode = Map.get(@modes, mode)
     current_mode = get_mode()
 
@@ -132,7 +150,8 @@ defmodule RFM69 do
   end
 
   defp get_mode do
-    @device.read_single(@reg_op_mode)
+    {:ok, byte} = @device.read_single(@reg_op_mode)
+    byte
   end
 
   defp wait_for_mode(mode) do
@@ -165,8 +184,8 @@ defmodule RFM69 do
   @reg_irq_flags1 0x27
   @mode_ready     0x80
   defp wait_for_mode_ready(mode) do
-    current_mode = @device.read_single(@reg_op_mode)
-    irq_flags1 = @device.read_single(@reg_irq_flags1)
+    {:ok, current_mode} = @device.read_single(@reg_op_mode)
+    {:ok, irq_flags1} = @device.read_single(@reg_irq_flags1)
     mode_ready = (irq_flags1 &&& @mode_ready) != 0x00
 
     case current_mode == mode && mode_ready do

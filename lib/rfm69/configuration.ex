@@ -65,6 +65,68 @@ defmodule RFM69.Configuration do
              test_dagc:      0x30,               # Fading Margin Improvement
              test_afc:       0x00]               # AFC offset for low modulation index AFC
 
+  @type t :: %Configuration{
+    op_mode:        byte,
+    data_modul:     byte,
+    bitrate:        0..0xFFFF,
+    fdev:           0..0xFFFF,
+    frf:            0..0xFFFFFF,
+    osc1:           byte,
+    afc_ctrl:       byte,
+    reserved0_c:    byte,
+    listen1:        byte,
+    listen2:        byte,
+    listen3:        byte,
+    version:        byte,
+    pa_level:       byte,
+    pa_ramp:        byte,
+    ocp:            byte,
+    reserved14:     byte,
+    reserved15:     byte,
+    reserved16:     byte,
+    reserved17:     byte,
+    lna:            byte,
+    rx_bw:          byte,
+    afc_bw:         byte,
+    ook_peak:       byte,
+    ook_avg:        byte,
+    ook_fix:        byte,
+    afc_fei:        byte,
+    afc:            byte,
+    fei:            byte,
+    rssi_config:    byte,
+    rssi_value:     byte,
+    dio_mapping1:   byte,
+    dio_mapping2:   byte,
+    irq_flags1:     byte,
+    irq_flags2:     byte,
+    rssi_thresh:    byte,
+    rx_timeout1:    byte,
+    rx_timeout2:    byte,
+    preamble:       0..0xFFFF,
+    sync_config:    byte,
+    sync_value:     0..0xFFFFFFFFFFFFFFFF,
+    packet_config1: byte,
+    payload_length: byte,
+    node_adrs:      byte,
+    broadcast_adrs: byte,
+    auto_modes:     byte,
+    fifo_thresh:    byte,
+    packet_config2: byte,
+    aes_key:        byte,
+    temp1:          byte,
+    temp2:          byte,
+    test_lna:       byte,
+    test_pa1:       byte,
+    test_pa2:       byte,
+    test_dagc:      byte,
+    test_afc:       byte,
+  }
+
+  @doc """
+  Converts a `Configuration.t` struct into a binary that maps to the corresponding RFM69HCW register bytes
+  """
+  @spec to_binary(Configuration.t) :: binary
   def to_binary(c = %Configuration{}) do
     <<c.op_mode::8,
       c.data_modul::8,
@@ -119,10 +181,18 @@ defmodule RFM69.Configuration do
   end
 
   @oscillator_frequency 32_000_000
+  @doc """
+  Converts a frequency in hz into the three-byte register format
+  """
+  @spec frequency_to_registers(non_neg_integer) :: 0..0xFFFFFF
   def frequency_to_registers(frequency_in_hz) do
     trunc(((frequency_in_hz <<< 19) + @oscillator_frequency / 2) / @oscillator_frequency)
   end
 
+  @doc """
+  Converts bitrate into the two byte register format
+  """
+  @spec bitrate_to_registers(non_neg_integer) :: 0..0xFFFF
   def bitrate_to_registers(bitrate) do
     trunc((@oscillator_frequency + bitrate / 2) / bitrate)
   end
