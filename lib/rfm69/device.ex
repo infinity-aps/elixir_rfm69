@@ -11,26 +11,33 @@ defmodule RFM69.Device do
   alias ElixirALE.{GPIO, SPI}
   alias RFM69.Configuration
 
+  @configuration_start 0x01
+  @hardware_version 0x10
+
   @doc """
   Accepts the SPI device (eg "spidev0.0"), the reset and interrupt GPIO pin numbers and initializes communication with
   the RFM69 chip.
   """
-  def start_link(spi_device, reset_pin, interrupt_pin) do
-    GenServer.start_link(__MODULE__, [spi_device, reset_pin, interrupt_pin], name: __MODULE__)
+  def start_link(spi_device, reset_pin, interrupt_pin, configuration = %Configuration{}) do
+    GenServer.start_link(__MODULE__, [spi_device, reset_pin, interrupt_pin, configuration], name: __MODULE__)
   end
 
   @doc """
   Initializes the SPI device and the reset and interrupt pins and prepares the RFM69 chip for interaction.
   """
-  def init([spi_device, reset_pin, interrupt_pin]) do
+  def init([spi_device, reset_pin, interrupt_pin, configuration]) do
     with {:ok, spi_pid} <- SPI.start_link(spi_device, speed_hz: 6_000_000),
          {:ok, reset_pid} <- GPIO.start_link(reset_pin, :output),
          {:ok, interrupt_pid} <- GPIO.start_link(interrupt_pin, :input),
-         :ok <- GPIO.write(reset_pid, 0) do
+         :ok <- GPIO.write(reset_pid, 0),
+         {:ok, <<0x24>>} <- _read_burst(spi_pid, @hardware_version, 1),
+         configuration_bytes <- Configuration.to_binary(configuration),
+         _write_burst(spi_pid, @configuration_start, configuration_bytes) do
+
       {:ok, %{spi_pid: spi_pid, reset_pid: reset_pid, interrupt_pid: interrupt_pid}}
     else
       error ->
-        message = "The SPI RFM69 chip interface failed to start"
+        message = "The SPI RFM69 chip interface failed to start: #{inspect error}"
         {:error, message}
     end
   end
@@ -84,14 +91,13 @@ defmodule RFM69.Device do
   def await_interrupt, do: GenServer.call(__MODULE__, {:await_interrupt})
 
   @doc """
-  Cancels the recieve pin interrupt. The interrupt is canceled under normal conditions when a response message is
+  Cancels the receive pin interrupt. The interrupt is canceled under normal conditions when a response message is
   triggered, but in the case of a timeout where the caller no longer has interest in the next packet, this function can
   be used.
   """
   @spec cancel_interrupt() :: :ok
   def cancel_interrupt, do: GenServer.call(__MODULE__, {:cancel_interrupt})
 
-  @configuration_start 0x01
   @doc """
   Writes a full configuration struct to the registers on the chip.
   """
@@ -121,18 +127,12 @@ defmodule RFM69.Device do
     {:reply, :ok, state}
   end
 
-  @write_mode 0x80
   def handle_call({:write_burst, location, data}, _from, state = %{spi_pid: spi_pid}) do
-    tx_bytes = <<@write_mode ||| location::8>> <> data
-    SPI.transfer(spi_pid, tx_bytes)
-    {:reply, :ok, state}
+    {:reply, _write_burst(spi_pid, location, data), state}
   end
 
   def handle_call({:read_burst, location, byte_count}, _from, state = %{spi_pid: spi_pid}) do
-    size_bits = byte_count * 8
-    tx_bytes = <<location::8, 0x00::size(size_bits)>>
-    <<_::8, rx_bytes::binary>> = SPI.transfer(spi_pid, tx_bytes)
-    {:reply, {:ok, rx_bytes}, state}
+    {:reply, _read_burst(spi_pid, location, byte_count), state}
   end
 
   def handle_call({:await_interrupt}, {sender, _}, state = %{interrupt_pid: interrupt_pid}) do
@@ -156,5 +156,19 @@ defmodule RFM69.Device do
 
   def handle_info({:gpio_interrupt, _, _}, state) do
     {:noreply, state}
+  end
+
+  @write_mode 0x80
+  defp _write_burst(spi_pid, location, data) do
+    tx_bytes = <<@write_mode ||| location::8>> <> data
+    SPI.transfer(spi_pid, tx_bytes)
+    :ok
+  end
+
+  defp _read_burst(spi_pid, location, byte_count) do
+    size_bits = byte_count * 8
+    tx_bytes = <<location::8, 0x00::size(size_bits)>>
+    <<_::8, rx_bytes::binary>> = SPI.transfer(spi_pid, tx_bytes)
+    {:ok, rx_bytes}
   end
 end
