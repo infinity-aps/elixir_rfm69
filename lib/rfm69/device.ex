@@ -18,21 +18,19 @@ defmodule RFM69.Device do
   Accepts the SPI device (eg "spidev0.0"), the reset and interrupt GPIO pin numbers and initializes communication with
   the RFM69 chip.
   """
-  def start_link(spi_device, reset_pin, interrupt_pin, configuration = %Configuration{}) do
-    GenServer.start_link(__MODULE__, [spi_device, reset_pin, interrupt_pin, configuration], name: __MODULE__)
+  def start_link(spi_device, reset_pin, interrupt_pin) do
+    GenServer.start_link(__MODULE__, [spi_device, reset_pin, interrupt_pin], name: __MODULE__)
   end
 
   @doc """
   Initializes the SPI device and the reset and interrupt pins and prepares the RFM69 chip for interaction.
   """
-  def init([spi_device, reset_pin, interrupt_pin, configuration]) do
+  def init([spi_device, reset_pin, interrupt_pin]) do
     with {:ok, spi_pid} <- SPI.start_link(spi_device, speed_hz: 6_000_000),
          {:ok, reset_pid} <- GPIO.start_link(reset_pin, :output),
          {:ok, interrupt_pid} <- GPIO.start_link(interrupt_pin, :input),
          :ok <- GPIO.write(reset_pid, 0),
-         {:ok, <<0x24>>} <- _read_burst(spi_pid, @hardware_version, 1),
-         configuration_bytes <- Configuration.to_binary(configuration),
-         _write_burst(spi_pid, @configuration_start, configuration_bytes) do
+         {:ok, <<0x24>>} <- _read_burst(spi_pid, @hardware_version, 1) do
 
       {:ok, %{spi_pid: spi_pid, reset_pid: reset_pid, interrupt_pid: interrupt_pid}}
     else
