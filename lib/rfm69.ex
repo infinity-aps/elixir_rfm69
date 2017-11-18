@@ -1,6 +1,7 @@
 defmodule RFM69 do
   use Bitwise
 
+  alias RFM69.Device
   alias RFM69.Configuration
 
   @moduledoc false
@@ -11,8 +12,8 @@ defmodule RFM69 do
   Sets the base frequency of the RFM69 chip in MHz
   """
   @frf_location 0x07
-  @spec set_base_frequency(RFM69.Device.t, pos_integer) :: {:ok}
-  def set_base_frequency(%{name: name}, mhz) do
+  @spec set_base_frequency(Device.t, pos_integer) :: {:ok}
+  def set_base_frequency(%Device{name: name}, mhz) do
     frequency_in_hz = trunc(mhz * 1_000_000)
     register_values = Configuration.frequency_to_registers(frequency_in_hz)
     register_bytes = <<register_values::24>>
@@ -23,8 +24,8 @@ defmodule RFM69 do
   @doc """
   reads a frame of binary data from the chip's FIFO queue
   """
-  @spec read(RFM69.Device.t, non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
-  def read(%{name: name}, timeout_ms) do
+  @spec read(Device.t, non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
+  def read(%Device{name: name}, timeout_ms) do
     set_auto_modes(name, [])
     set_mode(name, :receiver)
     GenServer.call(name, {:await_interrupt})
@@ -48,8 +49,8 @@ defmodule RFM69 do
   @doc """
   Writes a frame of binary data to the FIFO queue
   """
-  @spec write(RFM69.Device.t, binary, pos_integer, non_neg_integer, non_neg_integer, boolean) :: {:ok, <<>>}
-  def write(chip = %{name: name}, packet_bytes, repetitions, repetition_delay, timeout_ms, initial \\ true) do
+  @spec write(Device.t, binary, pos_integer, non_neg_integer, non_neg_integer, boolean) :: {:ok, <<>>}
+  def write(chip = %Device{name: name}, packet_bytes, repetitions, repetition_delay, timeout_ms, initial \\ true) do
     if initial == true do
       clear_fifo(name)
       set_mode(name, :standby)
@@ -70,14 +71,14 @@ defmodule RFM69 do
   @doc """
   Writes the given binary data to the FIFO queue and waits for the response.
   """
-  @spec write_and_read(RFM69.Device.t, binary, non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
-  def write_and_read(chip, packet_bytes, timeout_ms) do
+  @spec write_and_read(Device.t, binary, non_neg_integer) :: {:ok, %{data: binary, rssi: number}} | {:error, any()}
+  def write_and_read(chip = %Device{}, packet_bytes, timeout_ms) do
     write(chip, packet_bytes, 1, 0, timeout_ms)
     read(chip, timeout_ms)
   end
 
-  @spec clear_buffers(RFM69.Device.t) :: :ok
-  def clear_buffers(%{name: name}) do
+  @spec clear_buffers(Device.t) :: :ok
+  def clear_buffers(%Device{name: name}) do
     clear_fifo(name)
   end
 
@@ -85,8 +86,8 @@ defmodule RFM69 do
   Writes a full configuration struct to the registers on the chip.
   """
   @configuration_start 0x01
-  @spec write_configuration(RFM69.Device.t, RFM69.Configuration.t) :: :ok
-  def write_configuration(%{name: name}, rf_config = %RFM69.Configuration{}) do
+  @spec write_configuration(Device.t, RFM69.Configuration.t) :: :ok
+  def write_configuration(%Device{name: name}, rf_config = %Configuration{}) do
     configuration_bytes = Configuration.to_binary(rf_config)
     :ok = GenServer.call(name, {:write_burst, @configuration_start, configuration_bytes})
   end

@@ -9,12 +9,10 @@ defmodule RFM69.Device do
   require Logger
 
   alias ElixirALE.{GPIO, SPI}
-  alias RFM69.Configuration
 
   defstruct name: nil, device: nil, reset_pin: nil, interrupt_pin: nil
-  # @type t :: %RFM69.Device{​name: String.t, ​device:​ String.t, reset_pin: integer, interrupt_pin: integer}
+  @type t :: %RFM69.Device{name: :atom, device: String.t, reset_pin: integer, interrupt_pin: integer}
 
-  @configuration_start 0x01
   @hardware_version 0x10
 
   @doc """
@@ -43,72 +41,19 @@ defmodule RFM69.Device do
     end
   end
 
-  def chip_present?(%RFM69.Device{device: device, reset_pin: reset_pin, interrupt_pin: interrupt_pin}) do
+  def chip_present?(%RFM69.Device{device: device}) do
     case SPI.start_link(device, speed_hz: 6_000_000) do
       {:ok, spi_pid} ->
         found = {:ok, <<0x24>>} == _read_burst(spi_pid, @hardware_version, 1)
         SPI.release(spi_pid)
         found
-      error -> false
+      _error -> false
     end
   end
 
-  # @doc """
-  # Read burst operations happen similarly to `write_burst`, where the first byte is the register location, and each
-  # subsequent byte sent (the value of the tx byte doesn't matter) results in a byte read with the value of that register
-  # location using the same auto-incrementing as in writes.
-  # """
-  # @spec read_burst(byte, pos_integer) :: {:ok, binary}
-  # def read_burst(location, byte_count) do
-  #   GenServer.call(__MODULE__, {:read_burst, location, byte_count})
-  # end
-
-  # @doc """
-  # Read single is a subtype of `read_burst` where only the location byte and a "don't care" byte are sent in the frame
-  # and the second byte returned is the register value.
-  # """
-  # @spec read_single(byte) :: {:ok, byte}
-  # def read_single(location) do
-  #   {:ok, <<value::8>>} = read_burst(location, 1)
-  #   {:ok, value}
-  # end
-
-  # @doc """
-  # Writing to one or more configuration register locations is done via a "write burst", where the first byte transferred
-  # over SPI is the location logically ORed with 0x80 (the write bit), the second byte is the value for that register
-  # location, and each subsequent sent byte is stored in the proceeding register locations. The RFM69 chip auto-increments
-  # the register location for each byte so that a single frame of bytes can write the entire register configuration.
-  # """
-  # @spec write_burst(byte, binary) :: :ok
-  # def write_burst(location, data), do: GenServer.call(__MODULE__, {:write_burst, location, data})
-
-  # @doc """
-  # Write single is a subtype of `write_burst` where only the location byte and a single value byte are sent in the frame.
-  # """
-  # @spec write_single(byte, byte) :: :ok
-  # def write_single(location, data), do: write_burst(location, <<data::8>>)
-
-  # @doc """
-  # Sets the reset GPIO pin high long enough to power cycle the RFM69 chip
-  # """
-  # @spec reset() :: :ok
-  # def reset, do: GenServer.call(__MODULE__, {:reset})
-
-  # @doc """
-  # Sets the receive pin interrupt so that the next incoming packet triggers an `{:ok, :interrupt_received}` message to
-  # the caller so that the fifo buffer can be processed to decode the packet.
-  # """
-  # @spec await_interrupt() :: :ok
-  # def await_interrupt, do: GenServer.call(__MODULE__, {:await_interrupt})
-
-  # @doc """
-  # Cancels the receive pin interrupt. The interrupt is canceled under normal conditions when a response message is
-  # triggered, but in the case of a timeout where the caller no longer has interest in the next packet, this function can
-  # be used.
-  # """
-  # @spec cancel_interrupt() :: :ok
-  # def cancel_interrupt, do: GenServer.call(__MODULE__, {:cancel_interrupt})
-
+  @doc """
+  Sets the reset GPIO pin high long enough to power cycle the RFM69 chip
+  """
   def handle_call({:reset}, _from, state = %{reset_pid: reset_pid}) do
     GPIO.write(reset_pid, 1)
     :timer.sleep(1)
@@ -117,19 +62,39 @@ defmodule RFM69.Device do
     {:reply, :ok, state}
   end
 
+  @doc """
+  Writing to one or more configuration register locations is done via a "write burst", where the first byte transferred
+  over SPI is the location logically ORed with 0x80 (the write bit), the second byte is the value for that register
+  location, and each subsequent sent byte is stored in the proceeding register locations. The RFM69 chip auto-increments
+  the register location for each byte so that a single frame of bytes can write the entire register configuration.
+  """
   def handle_call({:write_burst, location, data}, _from, state = %{spi_pid: spi_pid}) do
     {:reply, _write_burst(spi_pid, location, data), state}
   end
 
+  @doc """
+  Read burst operations happen similarly to `write_burst`, where the first byte is the register location, and each
+  subsequent byte sent (the value of the tx byte doesn't matter) results in a byte read with the value of that register
+  location using the same auto-incrementing as in writes.
+  """
   def handle_call({:read_burst, location, byte_count}, _from, state = %{spi_pid: spi_pid}) do
     {:reply, _read_burst(spi_pid, location, byte_count), state}
   end
 
+  @doc """
+  Sets the receive pin interrupt so that the next incoming packet triggers an `{:ok, :interrupt_received}` message to
+  the caller so that the fifo buffer can be processed to decode the packet.
+  """
   def handle_call({:await_interrupt}, {sender, _}, state = %{interrupt_pid: interrupt_pid}) do
     GPIO.set_int(interrupt_pid, :rising)
     {:reply, :ok, Map.put(state, :awaiting_interrupt, sender)}
   end
 
+  @doc """
+  Cancels the receive pin interrupt. The interrupt is canceled under normal conditions when a response message is
+  triggered, but in the case of a timeout where the caller no longer has interest in the next packet, this function can
+  be used.
+  """
   def handle_call({:cancel_interrupt}, {_, _}, state = %{interrupt_pid: interrupt_pid}) do
     GPIO.set_int(interrupt_pid, :none)
     {:reply, :ok, Map.delete(state, :awaiting_interrupt)}
